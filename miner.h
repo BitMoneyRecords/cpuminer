@@ -10,6 +10,14 @@
 #include <jansson.h>
 #include <curl/curl.h>
 
+#ifdef WIN32
+#define snprintf(...) _snprintf(__VA_ARGS__)
+#define strdup(x) _strdup(x)
+#define strncasecmp(x,y,z) _strnicmp(x,y,z)
+#define strcasecmp(x,y) _stricmp(x,y)
+typedef size_t ssize_t;
+#endif
+
 #ifdef STDC_HEADERS
 # include <stdlib.h>
 # include <stddef.h>

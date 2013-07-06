@@ -14,6 +14,10 @@
 #include <string.h>
 #include <stdint.h>
 
+#ifdef WIN32
+#define __attribute__(x)
+#endif
+
 #if defined(__arm__) && defined(__APCS_32__)
 #define EXTERN_SHA256
 #endif

@@ -106,8 +106,8 @@ enum sha256_algos {
 };
 
 static const char *algo_names[] = {
-	[ALGO_SCRYPT]		= "scrypt",
-	[ALGO_SHA256D]		= "sha256d",
+	"scrypt",
+	"sha256d",
 };
 
 bool opt_debug = false;
@@ -269,7 +269,7 @@ static bool jobj_binary(const json_t *obj, const char *key,
 		applog(LOG_ERR, "JSON key '%s' is not a string", key);
 		return false;
 	}
-	if (!hex2bin(buf, hexstr, buflen))
+	if (!hex2bin((unsigned char*)buf, hexstr, buflen))
 		return false;
 
 	return true;
@@ -455,7 +455,7 @@ static bool workio_get_work(struct workio_cmd *wc, CURL *curl)
 	struct work *ret_work;
 	int failures = 0;
 
-	ret_work = calloc(1, sizeof(*ret_work));
+	ret_work = (work*)calloc(1, sizeof(*ret_work));
 	if (!ret_work)
 		return false;
 
@@ -502,7 +502,7 @@ static bool workio_submit_work(struct workio_cmd *wc, CURL *curl)
 
 static void *workio_thread(void *userdata)
 {
-	struct thr_info *mythr = userdata;
+	struct thr_info *mythr = (struct thr_info *)userdata;
 	CURL *curl;
 	bool ok = true;
 
@@ -516,7 +516,7 @@ static void *workio_thread(void *userdata)
 		struct workio_cmd *wc;
 
 		/* wait for workio_cmd sent to us, on our queue */
-		wc = tq_pop(mythr->q, NULL);
+		wc = (struct workio_cmd *)tq_pop(mythr->q, NULL);
 		if (!wc) {
 			ok = false;
 			break;
@@ -552,7 +552,7 @@ static bool get_work(struct thr_info *thr, struct work *work)
 
 	if (opt_benchmark) {
 		memset(work->data, 0x55, 76);
-		work->data[17] = swab32(time(NULL));
+		work->data[17] = swab32((uint32_t)time(NULL));
 		memset(work->data + 19, 0x00, 52);
 		work->data[20] = 0x80000000;
 		work->data[31] = 0x00000280;
@@ -561,7 +561,7 @@ static bool get_work(struct thr_info *thr, struct work *work)
 	}
 
 	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
+	wc = (struct workio_cmd *)calloc(1, sizeof(*wc));
 	if (!wc)
 		return false;
 
@@ -575,7 +575,7 @@ static bool get_work(struct thr_info *thr, struct work *work)
 	}
 
 	/* wait for response, a unit of work */
-	work_heap = tq_pop(thr->q, NULL);
+	work_heap = (struct work *)tq_pop(thr->q, NULL);
 	if (!work_heap)
 		return false;
 
@@ -591,11 +591,11 @@ static bool submit_work(struct thr_info *thr, const struct work *work_in)
 	struct workio_cmd *wc;
 	
 	/* fill out work request message */
-	wc = calloc(1, sizeof(*wc));
+	wc = (struct workio_cmd *)calloc(1, sizeof(*wc));
 	if (!wc)
 		return false;
 
-	wc->u.work = malloc(sizeof(*work_in));
+	wc->u.work = (struct work *)malloc(sizeof(*work_in));
 	if (!wc->u.work)
 		goto err_out;
 
@@ -664,7 +664,7 @@ static void stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 
 static void *miner_thread(void *userdata)
 {
-	struct thr_info *mythr = userdata;
+	struct thr_info *mythr = (struct thr_info *)userdata;
 	int thr_id = mythr->id;
 	struct work work;
 	uint32_t max_nonce;
@@ -740,13 +740,13 @@ static void *miner_thread(void *userdata)
 		else
 			max64 = g_work_time + (have_longpoll ? LP_SCANTIME : opt_scantime)
 			      - time(NULL);
-		max64 *= thr_hashrates[thr_id];
+		max64 *= (int64_t)thr_hashrates[thr_id];
 		if (max64 <= 0)
 			max64 = opt_algo == ALGO_SCRYPT ? 0xfffLL : 0x1fffffLL;
 		if (work.data[19] + max64 > end_nonce)
 			max_nonce = end_nonce;
 		else
-			max_nonce = work.data[19] + max64;
+			max_nonce = (uint32_t)(work.data[19] + max64);
 		
 		hashes_done = 0;
 		gettimeofday(&tv_start, NULL);
@@ -814,7 +814,7 @@ static void restart_threads(void)
 
 static void *longpoll_thread(void *userdata)
 {
-	struct thr_info *mythr = userdata;
+	struct thr_info *mythr = (struct thr_info *)userdata;
 	CURL *curl = NULL;
 	char *copy_start, *hdr_path = NULL, *lp_url = NULL;
 	bool need_slash = false;
@@ -826,7 +826,7 @@ static void *longpoll_thread(void *userdata)
 	}
 
 start:
-	hdr_path = tq_pop(mythr->q, NULL);
+	hdr_path = (char*)tq_pop(mythr->q, NULL);
 	if (!hdr_path)
 		goto out;
 
@@ -842,7 +842,7 @@ start:
 		if (rpc_url[strlen(rpc_url) - 1] != '/')
 			need_slash = true;
 
-		lp_url = malloc(strlen(rpc_url) + strlen(copy_start) + 2);
+		lp_url = (char*)malloc(strlen(rpc_url) + strlen(copy_start) + 2);
 		if (!lp_url)
 			goto out;
 
@@ -935,10 +935,10 @@ out:
 
 static void *stratum_thread(void *userdata)
 {
-	struct thr_info *mythr = userdata;
+	struct thr_info *mythr = (struct thr_info *)userdata;
 	char *s;
 
-	stratum.url = tq_pop(mythr->q, NULL);
+	stratum.url = (char*)tq_pop(mythr->q, NULL);
 	if (!stratum.url)
 		goto out;
 	applog(LOG_INFO, "Starting Stratum on %s", stratum.url);
@@ -1022,7 +1022,7 @@ static void parse_arg (int key, char *arg)
 		for (i = 0; i < ARRAY_SIZE(algo_names); i++) {
 			if (algo_names[i] &&
 			    !strcmp(arg, algo_names[i])) {
-				opt_algo = i;
+				opt_algo = (sha256_algos)i;
 				break;
 			}
 		}
@@ -1106,7 +1106,7 @@ static void parse_arg (int key, char *arg)
 			if (!strlen(arg) || *arg == '/')
 				show_usage_and_exit(1);
 			free(rpc_url);
-			rpc_url = malloc(strlen(arg) + 8);
+			rpc_url = (char*)malloc(strlen(arg) + 8);
 			sprintf(rpc_url, "http://%s", arg);
 		}
 		p = strrchr(rpc_url, '@');
@@ -1119,7 +1119,7 @@ static void parse_arg (int key, char *arg)
 				free(rpc_userpass);
 				rpc_userpass = strdup(ap);
 				free(rpc_user);
-				rpc_user = calloc(sp - ap + 1, 1);
+				rpc_user = (char*)calloc(sp - ap + 1, 1);
 				strncpy(rpc_user, ap, sp - ap);
 				free(rpc_pass);
 				rpc_pass = strdup(sp + 1);
@@ -1138,7 +1138,7 @@ static void parse_arg (int key, char *arg)
 		free(rpc_userpass);
 		rpc_userpass = strdup(arg);
 		free(rpc_user);
-		rpc_user = calloc(p - arg + 1, 1);
+		rpc_user = (char*)calloc(p - arg + 1, 1);
 		strncpy(rpc_user, arg, p - arg);
 		free(rpc_pass);
 		rpc_pass = strdup(p + 1);
@@ -1325,7 +1325,7 @@ int main(int argc, char *argv[])
 		opt_n_threads = num_processors;
 
 	if (!rpc_userpass) {
-		rpc_userpass = malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
+		rpc_userpass = (char*)malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
 		if (!rpc_userpass)
 			return 1;
 		sprintf(rpc_userpass, "%s:%s", rpc_user, rpc_pass);
@@ -1336,11 +1336,11 @@ int main(int argc, char *argv[])
 		openlog("cpuminer", LOG_PID, LOG_USER);
 #endif
 
-	work_restart = calloc(opt_n_threads, sizeof(*work_restart));
+	work_restart = (struct work_restart *)calloc(opt_n_threads, sizeof(*work_restart));
 	if (!work_restart)
 		return 1;
 
-	thr_info = calloc(opt_n_threads + 3, sizeof(*thr));
+	thr_info = (struct thr_info *)calloc(opt_n_threads + 3, sizeof(*thr));
 	if (!thr_info)
 		return 1;
 	

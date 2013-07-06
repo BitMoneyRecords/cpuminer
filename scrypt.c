@@ -508,7 +508,7 @@ static inline void scrypt_core(uint32_t *X, uint32_t *V)
 
 unsigned char *scrypt_buffer_alloc()
 {
-	return malloc(SCRYPT_BUFFER_SIZE);
+	return (unsigned char*)malloc(SCRYPT_BUFFER_SIZE);
 }
 
 static void scrypt_1024_1_1_256(const uint32_t *input, uint32_t *output,
