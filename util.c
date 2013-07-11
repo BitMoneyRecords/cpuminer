@@ -157,7 +157,7 @@ static size_t upload_data_cb(void *ptr, size_t size, size_t nmemb,
 			     void *user_data)
 {
 	struct upload_buffer *ub = (struct upload_buffer *)user_data;
-	int len = size * nmemb;
+	unsigned int len = size * nmemb;
 
 	if (len > ub->len - ub->pos)
 		len = ub->len - ub->pos;
@@ -448,7 +448,7 @@ err_out:
 
 char *bin2hex(const unsigned char *p, size_t len)
 {
-	int i;
+	unsigned int i;
 	char *s = (char *)malloc((len * 2) + 1);
 	if (!s)
 		return NULL;

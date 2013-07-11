@@ -633,7 +633,7 @@ static void stratum_gen_work(struct stratum_ctx *sctx, struct work *work)
 	}
 	
 	/* Increment extranonce2 */
-	for (i = 0; i < sctx->xnonce2_size && !++sctx->job.xnonce2[i]; i++);
+	for (i = 0; i < (int)sctx->xnonce2_size && !++sctx->job.xnonce2[i]; i++);
 
 	/* Assemble block header */
 	memset(work->data, 0, 128);
