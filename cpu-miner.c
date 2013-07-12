@@ -43,7 +43,7 @@
 bool abort_flag = false; // CB
 
 #define PROGRAM_NAME		"minerd"
-#define PROGRAM_VERSION		"2013-07-12"
+#define PROGRAM_VERSION		"2013-07-13"
 #define DEF_RPC_URL		"http://127.0.0.1:9332/"
 #define LP_SCANTIME		60
 

@@ -1,4 +1,4 @@
-AC_INIT([cpuminer], [2.3.2])
+AC_INIT([cudaminer], [2013.07.13])
 
 AC_PREREQ([2.59c])
 AC_CANONICAL_SYSTEM
@@ -15,6 +15,8 @@ AC_PROG_GCC_TRADITIONAL
 AM_PROG_CC_C_O
 AM_PROG_AS
 AC_PROG_RANLIB
+AC_PROG_CXX
+AC_OPENMP
 
 dnl Checks for header files
 AC_HEADER_STDC
@@ -123,4 +125,37 @@ AC_CONFIG_FILES([
 	compat/Makefile
 	compat/jansson/Makefile
 	])
+
+dnl find out what version we are running
+ARCH=`uname -m`
+if [[ $ARCH == "x86_64" ]];
+then
+  SUFFIX="64"
+else
+  SUFFIX=""
+fi
+
+dnl Setup CUDA paths
+AC_ARG_WITH([cuda],
+   [  --with-cuda=PATH    prefix where cuda is installed [default=/usr/local/cuda]])
+
+if test -n "$with_cuda"
+then
+   CUDA_CFLAGS="-I$with_cuda/include"
+   CUDA_LIBS="-lcudart"
+   CUDA_LDFLAGS="-L$with_cuda/lib$SUFFIX"
+   NVCC="$with_cuda/bin/nvcc"
+else
+   CUDA_CFLAGS="-I/usr/local/cuda/include"
+   CUDA_LIBS="-lcudart"
+   CUDA_LDFLAGS="-L/usr/local/cuda/lib$SUFFIX"
+   NVCC="nvcc"
+fi
+AC_SUBST(CUDA_CFLAGS)
+AC_SUBST(CUDA_LIBS)
+AC_SUBST(CUDA_LDFLAGS)
+AC_SUBST(NVCC)
+
+AC_SUBST(OPENMP_CFLAGS) 
+
 AC_OUTPUT

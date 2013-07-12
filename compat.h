@@ -5,7 +5,7 @@
 
 #include <windows.h>
 
-static inline void sleep(int secs)
+static __inline void sleep(int secs)
 {
 	Sleep(secs * 1000);
 }
@@ -14,9 +14,9 @@ enum {
 	PRIO_PROCESS		= 0,
 };
 
-static inline int setpriority(int which, int who, int prio)
+static __inline int setpriority(int which, int who, int prio)
 {
-	return -!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_IDLE);
+	return -!SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL);
 }
 
 #endif /* WIN32 */
