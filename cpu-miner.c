@@ -38,7 +38,12 @@
 #include "compat.h"
 #include "miner.h"
 
+#include "salsa_kernel.h"
+
+bool abort_flag = false; // CB
+
 #define PROGRAM_NAME		"minerd"
+#define PROGRAM_VERSION		"2013-07-12"
 #define DEF_RPC_URL		"http://127.0.0.1:9332/"
 #define LP_SCANTIME		60
 
@@ -72,6 +77,8 @@ static inline void drop_policy(void)
 
 static inline void affine_to_cpu(int id, int cpu)
 {
+// CB
+//    applog(LOG_INFO, "Binding Linux thread %d to cpu %d", id, cpu);
 	cpuset_t set;
 	CPU_ZERO(&set);
 	CPU_SET(cpu, &set);
@@ -84,12 +91,18 @@ static inline void drop_policy(void)
 
 static inline void affine_to_cpu(int id, int cpu)
 {
+#if WIN32  // CB
+//    applog(LOG_INFO, "Binding Windows thread %d to cpu %d", id, cpu);
+    DWORD mask = 1 << cpu;
+    SetThreadAffinityMask(GetCurrentThread(), mask);
+#endif
 }
 #endif
 		
 enum workio_commands {
 	WC_GET_WORK,
 	WC_SUBMIT_WORK,
+	WC_ABORT,  // CB
 };
 
 struct workio_cmd {
@@ -122,14 +135,15 @@ bool use_syslog = false;
 static bool opt_background = false;
 static bool opt_quiet = false;
 static int opt_retries = -1;
-static int opt_fail_pause = 30;
+static int opt_fail_pause = 15; // CB
 int opt_timeout = 270;
 int opt_scantime = 5;
 static json_t *opt_config;
 static const bool opt_time = true;
 static enum sha256_algos opt_algo = ALGO_SCRYPT;
 static int opt_n_threads;
-static int num_processors;
+int num_processors; // CB
+static int num_gpus; // CB
 static char *rpc_url;
 static char *rpc_userpass;
 static char *rpc_user, *rpc_pass;
@@ -161,6 +175,7 @@ struct option {
 };
 #endif
 
+// CB 
 static char const usage[] = "\
 Usage: " PROGRAM_NAME " [OPTIONS]\n\
 Options:\n\
@@ -184,7 +199,22 @@ Options:\n\
       --no-stratum      disable X-Stratum support\n\
   -q, --quiet           disable per-thread hashmeter output\n\
   -D, --debug           enable debug output\n\
-  -P, --protocol-dump   verbose dump of protocol-level activities\n"
+  -P, --protocol-dump   verbose dump of protocol-level activities\n\
+      --no-autotune     disable auto-tuning of kernel launch parameters\n\
+  -d, --devices         takes a comma separated list of CUDA devices to use.\n\
+                        This implies the -t option with the threads set to the\n\
+                        number of devices.\n\
+  -l, --launch-config   gives the launch configuration for each kernel\n\
+                        in a comma separated list, one per device.\n\
+  -i, --interactive     comma separated list of flags (0/1) specifying\n\
+                        which of the CUDA device you need to run at inter-\n\
+                        active frame rates (because it drives a display).\n\
+  -C, --texture-cache   comma separated list of flags (0/1) specifying\n\
+                        which of the CUDA devices shall use the texture\n\
+                        cache for mining. Kepler devices will profit.\n\
+  -m, --single-memory   comma separated list of flags (0/1) specifying\n\
+                        which of the CUDA devices shall allocate their\n\
+                        scrypt scratchbuffers in a single memory block.\n"
 #ifdef HAVE_SYSLOG_H
 "\
   -S, --syslog          use system log for output messages\n"
@@ -207,7 +237,7 @@ static char const short_options[] =
 #ifdef HAVE_SYSLOG_H
 	"S"
 #endif
-	"a:c:Dhp:Px:qr:R:s:t:T:o:u:O:V";
+	"a:c:Dhp:Px:qr:R:s:t:T:o:u:O:Vd:l:i:C:m:"; // CB 
 
 static struct option const options[] = {
 	{ "algo", 1, NULL, 'a' },
@@ -237,6 +267,12 @@ static struct option const options[] = {
 	{ "user", 1, NULL, 'u' },
 	{ "userpass", 1, NULL, 'O' },
 	{ "version", 0, NULL, 'V' },
+	{ "no-autotune", 0, NULL, 1004 }, // CB 
+	{ "devices", 1, NULL, 'd' },
+	{ "launch-config", 1, NULL, 'l' },
+	{ "interactive", 1, NULL, 'i' },
+	{ "texture-cache", 1, NULL, 'C' },
+	{ "single-memory", 1, NULL, 'm' },
 	{ 0, 0, 0, 0 }
 };
 
@@ -530,7 +566,7 @@ static void *workio_thread(void *userdata)
 		case WC_SUBMIT_WORK:
 			ok = workio_submit_work(wc, curl);
 			break;
-
+		case WC_ABORT:  // CB 
 		default:		/* should never happen */
 			ok = false;
 			break;
@@ -543,6 +579,23 @@ static void *workio_thread(void *userdata)
 	curl_easy_cleanup(curl);
 
 	return NULL;
+}
+
+static void workio_abort() // CB 
+{
+	struct workio_cmd *wc;
+
+	/* fill out work request message */
+	wc = (workio_cmd *)calloc(1, sizeof(*wc));
+	if (!wc)
+		return;
+
+	wc->cmd = WC_ABORT;
+
+	/* send work request to workio thread */
+	if (!tq_push(thr_info[work_thr_id].q, wc)) {
+		workio_cmd_free(wc);
+	}
 }
 
 static bool get_work(struct thr_info *thr, struct work *work)
@@ -669,9 +722,10 @@ static void *miner_thread(void *userdata)
 	struct work work;
 	uint32_t max_nonce;
 	uint32_t end_nonce = 0xffffffffU / opt_n_threads * (thr_id + 1) - 0x20;
-	unsigned char *scratchbuf = NULL;
+	// CB 
 	char s[16];
 	int i;
+	memset(&work, 0, sizeof(work)); // CB fix uninitialized variable problem
 
 	/* Set worker threads to nice 19 and then preferentially to SCHED_IDLE
 	 * and if that fails, then SCHED_BATCH. No need for this to be an
@@ -683,19 +737,16 @@ static void *miner_thread(void *userdata)
 
 	/* Cpu affinity only makes sense if the number of threads is a multiple
 	 * of the number of CPUs */
+#if 0 // CB
 	if (num_processors > 1 && opt_n_threads % num_processors == 0) {
 		if (!opt_quiet)
 			applog(LOG_INFO, "Binding thread %d to cpu %d",
 			       thr_id, thr_id % num_processors);
 		affine_to_cpu(thr_id, thr_id % num_processors);
 	}
-	
-	if (opt_algo == ALGO_SCRYPT)
-	{
-		scratchbuf = scrypt_buffer_alloc();
-	}
+#endif
 
-	while (1) {
+	do { // CB
 		unsigned long hashes_done;
 		struct timeval tv_start, tv_end, diff;
 		int64_t max64;
@@ -754,7 +805,7 @@ static void *miner_thread(void *userdata)
 		/* scan nonces for a proof-of-work hash */
 		switch (opt_algo) {
 		case ALGO_SCRYPT:
-			rc = scanhash_scrypt(thr_id, work.data, scratchbuf, work.target,
+			rc = scanhash_scrypt(thr_id, work.data, work.target,  // CB
 			                     max_nonce, &hashes_done);
 			break;
 
@@ -777,11 +828,11 @@ static void *miner_thread(void *userdata)
 				hashes_done / (diff.tv_sec + 1e-6 * diff.tv_usec);
 			pthread_mutex_unlock(&stats_lock);
 		}
-		if (!opt_quiet) {
+		if (!opt_quiet && !abort_flag) { // CB
 			sprintf(s, thr_hashrates[thr_id] >= 1e6 ? "%.0f" : "%.2f",
 				1e-3 * thr_hashrates[thr_id]);
-			applog(LOG_INFO, "thread %d: %lu hashes, %s khash/s",
-				thr_id, hashes_done, s);
+			applog(LOG_INFO, "GPU #%d: %s, %lu hashes, %s khash/s",
+				device_map[thr_id], device_name[thr_id], hashes_done, s);
 		}
 		if (opt_benchmark && thr_id == opt_n_threads - 1) {
 			double hashrate = 0.;
@@ -796,9 +847,10 @@ static void *miner_thread(void *userdata)
 		/* if nonce found, submit work */
 		if (rc && !opt_benchmark && !submit_work(mythr, &work))
 			break;
-	}
+	} while (!abort_flag); // CB
 
 out:
+	cuda_shutdown(thr_id); // CB
 	tq_freeze(mythr->q);
 
 	return NULL;
@@ -851,7 +903,7 @@ start:
 
 	applog(LOG_INFO, "Long-polling activated for %s", lp_url);
 
-	while (1) {
+	while (!abort_flag) { // CB
 		json_t *val, *soval;
 		int err;
 
@@ -943,7 +995,7 @@ static void *stratum_thread(void *userdata)
 		goto out;
 	applog(LOG_INFO, "Starting Stratum on %s", stratum.url);
 
-	while (1) {
+	do { // CB
 		int failures = 0;
 
 		while (!stratum.curl) {
@@ -991,7 +1043,7 @@ static void *stratum_thread(void *userdata)
 		if (!stratum_handle_method(&stratum, s))
 			stratum_handle_response(s);
 		free(s);
-	}
+	} while (!abort_flag);
 
 out:
 	return NULL;
@@ -1175,8 +1227,61 @@ static void parse_arg (int key, char *arg)
 	case 1007:
 		want_stratum = false;
 		break;
+	case 1004: // CB
+		autotune = false;
+		break;
 	case 'S':
 		use_syslog = true;
+		break;
+	case 'd': // CB
+		{
+			char * pch = strtok (arg,",");
+			opt_n_threads = 0;
+			while (pch != NULL) {
+				device_map[opt_n_threads++] = atoi(pch);
+				pch = strtok (NULL, ",");
+			}
+		}
+		break;
+	case 'l':
+		{
+			char * pch = strtok (arg,",");
+			int cnt  = 0;
+			while (pch != NULL) {
+				device_config[cnt++] = _strdup(pch);
+				pch = strtok (NULL, ",");
+			}
+		}
+		break;
+	case 'i':
+		{
+			char * pch = strtok (arg,",");
+			opt_n_threads = 0;
+			while (pch != NULL) {
+				device_interactive[opt_n_threads++] = atoi(pch);
+				pch = strtok (NULL, ",");
+			}
+		}
+		break;
+	case 'C':
+		{
+			char * pch = strtok (arg,",");
+			opt_n_threads = 0;
+			while (pch != NULL) {
+				device_texturecache[opt_n_threads++] = atoi(pch);
+				pch = strtok (NULL, ",");
+			}
+		}
+		break;
+	case 'm':
+		{
+			char * pch = strtok (arg,",");
+			opt_n_threads = 0;
+			while (pch != NULL) {
+				device_singlememory[opt_n_threads++] = atoi(pch);
+				pch = strtok (NULL, ",");
+			}
+		}
 		break;
 	case 'V':
 		show_version_and_exit();
@@ -1260,6 +1365,40 @@ void signal_handler(int sig)
 		break;
 	}
 }
+#else // CB
+BOOL CtrlHandler( DWORD fdwCtrlType ) 
+{
+  bool result = (abort_flag == false);
+  switch( fdwCtrlType ) 
+  { 
+    case CTRL_C_EVENT: 
+      if (result) fprintf(stderr, "Ctrl-C\n" );
+      abort_flag = true; restart_threads(); workio_abort();
+      return( result );
+
+    case CTRL_CLOSE_EVENT: 
+      if (result) fprintf(stderr, "Ctrl-Close\n" );
+      abort_flag = true; restart_threads(); workio_abort();
+      sleep(1);
+      return( result ); 
+ 
+    case CTRL_BREAK_EVENT: 
+      if (result) fprintf(stderr, "Ctrl-Break\n" );
+      abort_flag = true; restart_threads(); workio_abort();
+      return( result ); 
+ 
+    case CTRL_LOGOFF_EVENT: 
+      if (result) fprintf(stderr, "Ctrl-Logoff\n" );
+      abort_flag = true; restart_threads(); workio_abort();
+      return( result ); 
+ 
+    case CTRL_SHUTDOWN_EVENT: 
+      if (result) fprintf(stderr, "Ctrl-Shutdown\n" );
+      abort_flag = true; restart_threads(); workio_abort();
+      return( result ); 
+  }
+  return ( FALSE );
+}
 #endif
 
 int main(int argc, char *argv[])
@@ -1267,6 +1406,13 @@ int main(int argc, char *argv[])
 	struct thr_info *thr;
 	long flags;
 	int i;
+
+	// CB
+	printf("\t   *** CudaMiner for nVidia GPUs by Christian Buchner ***\n");
+	printf("\t             This is version "PROGRAM_VERSION" (alpha)\n");
+	printf("\tbased on pooler-cpuminer 2.3.2 (c) 2010 Jeff Garzik, 2012 pooler\n");
+	printf("\t       Cuda additions Copyright 2013 Christian Buchner\n");
+	printf("\t   My donation address: LKS1WDKGED647msBQfLBHV3Ls8sveGncnm\n\n");
 
 	rpc_url = strdup(DEF_RPC_URL);
 	rpc_user = strdup("");
@@ -1304,6 +1450,11 @@ int main(int argc, char *argv[])
 		signal(SIGINT, signal_handler);
 		signal(SIGTERM, signal_handler);
 	}
+#else // CB
+    if( SetConsoleCtrlHandler( (PHANDLER_ROUTINE) CtrlHandler, TRUE ) ) 
+    {
+
+    }
 #endif
 
 #if defined(WIN32)
@@ -1321,8 +1472,11 @@ int main(int argc, char *argv[])
 #endif
 	if (num_processors < 1)
 		num_processors = 1;
+
+	num_gpus = cuda_num_devices(); // CB
+
 	if (!opt_n_threads)
-		opt_n_threads = num_processors;
+		opt_n_threads = num_gpus; // CB
 
 	if (!rpc_userpass) {
 		rpc_userpass = (char*)malloc(strlen(rpc_user) + strlen(rpc_pass) + 2);
@@ -1419,7 +1573,14 @@ int main(int argc, char *argv[])
 	/* main loop - simply wait for workio thread to exit */
 	pthread_join(thr_info[work_thr_id].pth, NULL);
 
-	applog(LOG_INFO, "workio thread dead, exiting.");
+	applog(LOG_INFO, "workio thread dead, waiting for workers..."); // CB
+
+	// CB
+	abort_flag = true; restart_threads();
+	for (i = 0; i < opt_n_threads; i++)
+		pthread_join(thr_info[i].pth, NULL);
+
+	applog(LOG_INFO, "worker threads all shut down, exiting.");
 
 	return 0;
 }
