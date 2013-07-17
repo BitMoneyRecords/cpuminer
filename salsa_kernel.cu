@@ -233,6 +233,18 @@ int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurre
            (device_texturecache[thr_id] != 0) ? device_texturecache[thr_id] : 0, (device_texturecache[thr_id] != 0) ? 'D' : ' ',
            (device_singlememory[thr_id] != 0) ? 1 : 0 );
 
+    // figure out which kernel implementation to use
+    if (!validate_config(device_config[thr_id], optimal_blocks, WARPS_PER_BLOCK, &kernel, &props)) {
+             if (props.major == 3 && props.minor == 5)
+            kernel = new TitanKernel();
+        else if (props.major == 3 && props.minor == 0)
+            kernel = new SpinlockKernel();
+        else if (props.major <= 2)
+            kernel = new FermiKernel();
+        else if (props.major == 1)
+            kernel = new LegacyKernel();
+    }
+
     // compute highest MAXWARPS numbers for kernels allowing cudaBindTexture to succeed
     int MW_1D_4 = 134217728 / (SCRATCH * WU_PER_WARP / 4); // for uint4_t textures
     int MW_1D_2 = 134217728 / (SCRATCH * WU_PER_WARP / 2); // for uint2_t textures
@@ -243,19 +255,10 @@ int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurre
     {
         // if no launch config was specified, we simply
         // allocate the single largest memory chunk on the device that we can get
-        if (validate_config(device_config[thr_id], optimal_blocks, WARPS_PER_BLOCK, &kernel, &props)) {
+        if (validate_config(device_config[thr_id], optimal_blocks, WARPS_PER_BLOCK)) {
             MAXWARPS[thr_id] = optimal_blocks * WARPS_PER_BLOCK;
         }
         else {
-                 if (props.major == 3 && props.minor == 5)
-                kernel = new TitanKernel();
-            else if (props.major == 3 && props.minor == 0)
-                kernel = new SpinlockKernel();
-            else if (props.major <= 2)
-                kernel = new FermiKernel();
-            else if (props.major == 1)
-                kernel = new LegacyKernel();
-
             // compute no. of warps to allocate the largest number producing a single memory block below 4GB
             for (int warp = 0xFFFFFFFF / (SCRATCH * WU_PER_WARP * sizeof(uint32_t)); warp >= 1; --warp) {
                 checkCudaErrors(cudaMalloc((void **)&d_V, SCRATCH * WU_PER_WARP * warp * sizeof(uint32_t)));
