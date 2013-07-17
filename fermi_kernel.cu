@@ -1,7 +1,7 @@
 //
-// Kernel that runs best on Kepler (Compute 3.0) devices
+// Kernel that runs best on Fermi devices
 //
-// NOTE: compile this .cu module for compute_11,sm_11 with --maxrregcount=124
+// NOTE: compile this .cu module for compute_10,sm_10 with --maxrregcount=124
 //
 
 #ifdef WIN32
@@ -14,7 +14,7 @@
 
 #include <cuda.h>
 
-#include "spinlock_kernel.h"
+#include "fermi_kernel.h"
 
 #if WIN32
 #ifdef _WIN64
@@ -31,9 +31,9 @@
 #endif
 
 // forward references
-template <int WARPS_PER_BLOCK> __global__ void scrypt_core_kernel_spinlockA(uint32_t *g_idata, int *mutex);
-template <int WARPS_PER_BLOCK> __global__ void scrypt_core_kernel_spinlockB(uint32_t *g_odata, int *mutex);
-template <int WARPS_PER_BLOCK, int TEX_DIM> __global__ void scrypt_core_kernel_spinlockB_tex(uint32_t *g_odata, int *mutex);
+template <int WARPS_PER_BLOCK> __global__ void scrypt_core_kernelA(uint32_t *g_idata);
+template <int WARPS_PER_BLOCK> __global__ void scrypt_core_kernelB(uint32_t *g_odata);
+template <int WARPS_PER_BLOCK, int TEX_DIM> __global__ void scrypt_core_kernelB_tex(uint32_t *g_odata);
 
 // scratchbuf constants (pointers to scratch buffer for each work unit)
 __constant__ uint32_t* c_V[1024];
@@ -42,11 +42,11 @@ __constant__ uint32_t* c_V[1024];
 texture<uint4, 1, cudaReadModeElementType> texRef1D_4_V;
 texture<uint4, 2, cudaReadModeElementType> texRef2D_4_V;
 
-SpinlockKernel::SpinlockKernel() : KernelInterface()
+FermiKernel::FermiKernel() : KernelInterface()
 {
 }
 
-bool SpinlockKernel::bindtexture_1D(uint32_t *d_V, size_t size)
+bool FermiKernel::bindtexture_1D(uint32_t *d_V, size_t size)
 {
     cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc<uint4>();
     texRef1D_4_V.normalized = 0;
@@ -56,7 +56,7 @@ bool SpinlockKernel::bindtexture_1D(uint32_t *d_V, size_t size)
     return true;
 }
 
-bool SpinlockKernel::bindtexture_2D(uint32_t *d_V, int width, int height, size_t pitch)
+bool FermiKernel::bindtexture_2D(uint32_t *d_V, int width, int height, size_t pitch)
 {
     cudaChannelFormatDesc channelDesc4 = cudaCreateChannelDesc<uint4>();
     texRef2D_4_V.normalized = 0;
@@ -67,24 +67,24 @@ bool SpinlockKernel::bindtexture_2D(uint32_t *d_V, int width, int height, size_t
     return true;
 }
 
-bool SpinlockKernel::unbindtexture_1D()
+bool FermiKernel::unbindtexture_1D()
 {
     checkCudaErrors(cudaUnbindTexture(texRef1D_4_V));
     return true;
 }
 
-bool SpinlockKernel::unbindtexture_2D()
+bool FermiKernel::unbindtexture_2D()
 {
     checkCudaErrors(cudaUnbindTexture(texRef2D_4_V));
     return true;
 }
 
-void SpinlockKernel::set_scratchbuf_constants(int MAXWARPS, uint32_t** h_V)
+void FermiKernel::set_scratchbuf_constants(int MAXWARPS, uint32_t** h_V)
 {
     checkCudaErrors(cudaMemcpyToSymbol(c_V, h_V, MAXWARPS*sizeof(uint32_t*), 0, cudaMemcpyHostToDevice));
 }
 
-bool SpinlockKernel::run_kernel(dim3 grid, dim3 threads, int WARPS_PER_BLOCK, int thr_id, cudaStream_t stream, uint32_t* d_idata, uint32_t* d_odata, int *mutex, bool interactive, bool benchmark, int texture_cache)
+bool FermiKernel::run_kernel(dim3 grid, dim3 threads, int WARPS_PER_BLOCK, int thr_id, cudaStream_t stream, uint32_t* d_idata, uint32_t* d_odata, int *mutex, bool interactive, bool benchmark, int texture_cache)
 {
     bool success = true;
 
@@ -94,14 +94,14 @@ bool SpinlockKernel::run_kernel(dim3 grid, dim3 threads, int WARPS_PER_BLOCK, in
     // First phase: Sequential writes to scratchpad.
 
     switch (WARPS_PER_BLOCK) {
-        case 1: scrypt_core_kernel_spinlockA<1><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
-        case 2: scrypt_core_kernel_spinlockA<2><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
-        case 3: scrypt_core_kernel_spinlockA<3><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
-        case 4: scrypt_core_kernel_spinlockA<4><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
-        case 5: scrypt_core_kernel_spinlockA<5><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
-        case 6: scrypt_core_kernel_spinlockA<6><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
-        case 7: scrypt_core_kernel_spinlockA<7><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
-        case 8: scrypt_core_kernel_spinlockA<8><<< grid, threads, 0, stream >>>(d_idata, mutex); break;
+        case 1: scrypt_core_kernelA<1><<< grid, threads, 0, stream >>>(d_idata); break;
+        case 2: scrypt_core_kernelA<2><<< grid, threads, 0, stream >>>(d_idata); break;
+        case 3: scrypt_core_kernelA<3><<< grid, threads, 0, stream >>>(d_idata); break;
+        case 4: scrypt_core_kernelA<4><<< grid, threads, 0, stream >>>(d_idata); break;
+        case 5: scrypt_core_kernelA<5><<< grid, threads, 0, stream >>>(d_idata); break;
+        case 6: scrypt_core_kernelA<6><<< grid, threads, 0, stream >>>(d_idata); break;
+        case 7: scrypt_core_kernelA<7><<< grid, threads, 0, stream >>>(d_idata); break;
+        case 8: scrypt_core_kernelA<8><<< grid, threads, 0, stream >>>(d_idata); break;
         default: success = false; break;
     }
 
@@ -123,28 +123,28 @@ bool SpinlockKernel::run_kernel(dim3 grid, dim3 threads, int WARPS_PER_BLOCK, in
         if (texture_cache == 1)
         {
             switch (WARPS_PER_BLOCK) {
-                case 1: scrypt_core_kernel_spinlockB_tex<1,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 2: scrypt_core_kernel_spinlockB_tex<2,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 3: scrypt_core_kernel_spinlockB_tex<3,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 4: scrypt_core_kernel_spinlockB_tex<4,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 5: scrypt_core_kernel_spinlockB_tex<5,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 6: scrypt_core_kernel_spinlockB_tex<6,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 7: scrypt_core_kernel_spinlockB_tex<7,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 8: scrypt_core_kernel_spinlockB_tex<8,1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
+                case 1: scrypt_core_kernelB_tex<1,1><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 2: scrypt_core_kernelB_tex<2,1><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 3: scrypt_core_kernelB_tex<3,1><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 4: scrypt_core_kernelB_tex<4,1><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 5: scrypt_core_kernelB_tex<5,1><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 6: scrypt_core_kernelB_tex<6,1><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 7: scrypt_core_kernelB_tex<7,1><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 8: scrypt_core_kernelB_tex<8,1><<< grid, threads, 0, stream >>>(d_odata); break;
                 default: success = false; break;
             }
         }
         else if (texture_cache == 2)
         {
             switch (WARPS_PER_BLOCK) {
-                case 1: scrypt_core_kernel_spinlockB_tex<1,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 2: scrypt_core_kernel_spinlockB_tex<2,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 3: scrypt_core_kernel_spinlockB_tex<3,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 4: scrypt_core_kernel_spinlockB_tex<4,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 5: scrypt_core_kernel_spinlockB_tex<5,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 6: scrypt_core_kernel_spinlockB_tex<6,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 7: scrypt_core_kernel_spinlockB_tex<7,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-                case 8: scrypt_core_kernel_spinlockB_tex<8,2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
+                case 1: scrypt_core_kernelB_tex<1,2><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 2: scrypt_core_kernelB_tex<2,2><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 3: scrypt_core_kernelB_tex<3,2><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 4: scrypt_core_kernelB_tex<4,2><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 5: scrypt_core_kernelB_tex<5,2><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 6: scrypt_core_kernelB_tex<6,2><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 7: scrypt_core_kernelB_tex<7,2><<< grid, threads, 0, stream >>>(d_odata); break;
+                case 8: scrypt_core_kernelB_tex<8,2><<< grid, threads, 0, stream >>>(d_odata); break;
                 default: success = false; break;
             }
         } else success = false;
@@ -152,14 +152,14 @@ bool SpinlockKernel::run_kernel(dim3 grid, dim3 threads, int WARPS_PER_BLOCK, in
     else
     {
         switch (WARPS_PER_BLOCK) {
-            case 1: scrypt_core_kernel_spinlockB<1><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-            case 2: scrypt_core_kernel_spinlockB<2><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-            case 3: scrypt_core_kernel_spinlockB<3><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-            case 4: scrypt_core_kernel_spinlockB<4><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-            case 5: scrypt_core_kernel_spinlockB<5><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-            case 6: scrypt_core_kernel_spinlockB<6><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-            case 7: scrypt_core_kernel_spinlockB<7><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
-            case 8: scrypt_core_kernel_spinlockB<8><<< grid, threads, 0, stream >>>(d_odata, mutex); break;
+            case 1: scrypt_core_kernelB<1><<< grid, threads, 0, stream >>>(d_odata); break;
+            case 2: scrypt_core_kernelB<2><<< grid, threads, 0, stream >>>(d_odata); break;
+            case 3: scrypt_core_kernelB<3><<< grid, threads, 0, stream >>>(d_odata); break;
+            case 4: scrypt_core_kernelB<4><<< grid, threads, 0, stream >>>(d_odata); break;
+            case 5: scrypt_core_kernelB<5><<< grid, threads, 0, stream >>>(d_odata); break;
+            case 6: scrypt_core_kernelB<6><<< grid, threads, 0, stream >>>(d_odata); break;
+            case 7: scrypt_core_kernelB<7><<< grid, threads, 0, stream >>>(d_odata); break;
+            case 8: scrypt_core_kernelB<8><<< grid, threads, 0, stream >>>(d_odata); break;
             default: success = false; break;
         }
     }
@@ -240,32 +240,15 @@ static __host__ __device__ uint4& operator^=(uint4& left, const uint4& right)
     return left;
 }
 
-static __device__ void lock(int *mutex, int i)
-{
-    while( atomicCAS( &mutex[i], 0, 1 ) != 0 )
-    {
-        // keep the (slow) special function unit busy to avoid hammering
-        // the memory controller with atomic operations while busy waiting
-        asm volatile("{\t\n.reg .f32 tmp;\t\n"
-                     "lg2.approx.f32 tmp, 0f00000000;\t\n}" :: );
-    }
-}
-
-static __device__ void unlock(int *mutex, int i)
-{
-    atomicExch( &mutex[i], 0 );
-}
-
 ////////////////////////////////////////////////////////////////////////////////
-//! Scrypt core kernel using spinlocks to cut shared memory use in half.
-//! Ideal for Kepler devices where shared memory use prevented optimal occupancy.
+//! Scrypt core kernel
 //! @param g_idata  input data in global memory
 //! @param g_odata  output data in global memory
 ////////////////////////////////////////////////////////////////////////////////
 template <int WARPS_PER_BLOCK> __global__ void
-scrypt_core_kernel_spinlockA(uint32_t *g_idata, int *mutex)
+scrypt_core_kernelA(uint32_t *g_idata)
 {
-    __shared__ uint32_t X[(WARPS_PER_BLOCK+1)/2][WU_PER_WARP][16+1+_64BIT_ALIGN]; // +1 to resolve bank conflicts
+    __shared__ uint32_t X[WARPS_PER_BLOCK][WU_PER_WARP][16+1+_64BIT_ALIGN]; // +1 to resolve bank conflicts
 
     volatile int warpIdx        = threadIdx.x / warpSize;
     volatile int warpThread     = threadIdx.x % warpSize;
@@ -273,7 +256,7 @@ scrypt_core_kernel_spinlockA(uint32_t *g_idata, int *mutex)
     // add block specific offsets
     volatile int offset = blockIdx.x * WU_PER_BLOCK + warpIdx * WU_PER_WARP;
     g_idata += 32 * offset;
-    uint32_t * volatile V = c_V[offset / WU_PER_WARP];
+    uint32_t * volatile V = c_V[offset/WU_PER_WARP];
 
     // variables supporting the large memory transaction magic
     volatile unsigned int Y = warpThread/4;
@@ -282,45 +265,40 @@ scrypt_core_kernel_spinlockA(uint32_t *g_idata, int *mutex)
     // registers to store an entire work unit
     uint32_t B[16], C[16];
 
-    if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
+#pragma unroll 4
+    for (int wu=0; wu < 32; wu+=8)
+        *((uint4*)(&V[SCRATCH*(wu+Y)+Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z])) = *((uint4*)(&g_idata[32*(wu+Y)+Z]));
+#pragma unroll 16
+    for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx][warpThread][idx];
 
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&V[SCRATCH*(wu+Y)+Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z])) = *((uint4*)(&g_idata[32*(wu+Y)+Z]));
+        *((uint4*)(&V[SCRATCH*(wu+Y)+16+Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z])) = *((uint4*)(&g_idata[32*(wu+Y)+16+Z]));
 #pragma unroll 16
-    for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx/2][warpThread][idx];
-
-#pragma unroll 4
-    for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&V[SCRATCH*(wu+Y)+16+Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z])) = *((uint4*)(&g_idata[32*(wu+Y)+16+Z]));
-#pragma unroll 16
-    for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx/2][warpThread][idx];
+    for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx][warpThread][idx];
 
     for (int i = 1; i < 1024; i++) {
 
-        if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
         xor_salsa8(B, C); xor_salsa8(C, B);
-        if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
 
 #pragma unroll 16
-        for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = B[idx];
+        for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = B[idx];
 #pragma unroll 4
         for (int wu=0; wu < 32; wu+=8)
-            *((uint4*)(&V[SCRATCH*(wu+Y) + i*32 + Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z]));
+            *((uint4*)(&V[SCRATCH*(wu+Y) + i*32 + Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z]));
 
 #pragma unroll 16
-        for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = C[idx];
+        for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = C[idx];
 #pragma unroll 4
         for (int wu=0; wu < 32; wu+=8)
-            *((uint4*)(&V[SCRATCH*(wu+Y) + i*32 + 16 + Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z]));
+            *((uint4*)(&V[SCRATCH*(wu+Y) + i*32 + 16 + Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z]));
     }
-    if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
 }
 
 template <int WARPS_PER_BLOCK> __global__ void
-scrypt_core_kernel_spinlockB(uint32_t *g_odata, int *mutex)
+scrypt_core_kernelB(uint32_t *g_odata)
 {
-    __shared__ uint32_t X[(WARPS_PER_BLOCK+1)/2][WU_PER_WARP][16+1+_64BIT_ALIGN]; // +1 to resolve bank conflicts
+    __shared__ uint32_t X[WARPS_PER_BLOCK][WU_PER_WARP][16+1+_64BIT_ALIGN]; // +1 to resolve bank conflicts
 
     volatile int warpIdx        = threadIdx.x / warpSize;
     volatile int warpThread     = threadIdx.x % warpSize;
@@ -328,7 +306,7 @@ scrypt_core_kernel_spinlockB(uint32_t *g_odata, int *mutex)
     // add block specific offsets
     volatile int offset = blockIdx.x * WU_PER_BLOCK + warpIdx * WU_PER_WARP;
     g_odata += 32 * offset;
-    uint32_t * volatile V = c_V[offset / WU_PER_WARP];
+    uint32_t * volatile V = c_V[offset/WU_PER_WARP];
 
     // variables supporting the large memory transaction magic
     volatile unsigned int Y = warpThread/4;
@@ -337,68 +315,60 @@ scrypt_core_kernel_spinlockB(uint32_t *g_odata, int *mutex)
     // registers to store an entire work unit
     uint32_t B[16], C[16];
 
-    if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
+#pragma unroll 4
+    for (int wu=0; wu < 32; wu+=8)
+        *((uint4*)(&X[warpIdx][wu+Y][Z])) = *((uint4*)(&V[SCRATCH*(wu+Y) + 1023*32 + Z]));
+#pragma unroll 16
+    for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx][warpThread][idx];
 
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&X[warpIdx/2][wu+Y][Z])) = *((uint4*)(&V[SCRATCH*(wu+Y) + 1023*32 + Z]));
+        *((uint4*)(&X[warpIdx][wu+Y][Z])) = *((uint4*)(&V[SCRATCH*(wu+Y) + 1023*32 + 16+Z]));
 #pragma unroll 16
-    for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx/2][warpThread][idx];
+    for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx][warpThread][idx];
 
-#pragma unroll 4
-    for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&X[warpIdx/2][wu+Y][Z])) = *((uint4*)(&V[SCRATCH*(wu+Y) + 1023*32 + 16+Z]));
-#pragma unroll 16
-    for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx/2][warpThread][idx];
-
-    if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
     xor_salsa8(B, C); xor_salsa8(C, B);
-    if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
 
     for (int i = 0; i < 1024; i++) {
 
-        X[warpIdx/2][warpThread][16] = C[0];
+        X[warpIdx][warpThread][16] = C[0];
 
 #pragma unroll 16
-        for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = B[idx];
+        for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = B[idx];
 #pragma unroll 4
         for (int wu=0; wu < 32; wu+=8)
-            *((uint4*)(&X[warpIdx/2][wu+Y][Z])) ^= *((uint4*)(&V[SCRATCH*(wu+Y) + 32*(X[warpIdx/2][wu+Y][16] & 1023) + Z]));
+            *((uint4*)(&X[warpIdx][wu+Y][Z])) ^= *((uint4*)(&V[SCRATCH*(wu+Y) + 32*(X[warpIdx][wu+Y][16] & 1023) + Z]));
 #pragma unroll 16
-        for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx/2][warpThread][idx];
+        for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx][warpThread][idx];
 
 #pragma unroll 16
-        for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = C[idx];
+        for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = C[idx];
 #pragma unroll 4
         for (int wu=0; wu < 32; wu+=8)
-            *((uint4*)(&X[warpIdx/2][wu+Y][Z])) ^= *((uint4*)(&V[SCRATCH*(wu+Y) + 32*(X[warpIdx/2][wu+Y][16] & 1023) + 16 + Z]));
+            *((uint4*)(&X[warpIdx][wu+Y][Z])) ^= *((uint4*)(&V[SCRATCH*(wu+Y) + 32*(X[warpIdx][wu+Y][16] & 1023) + 16 + Z]));
 #pragma unroll 16
-        for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx/2][warpThread][idx];
+        for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx][warpThread][idx];
 
-        if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
         xor_salsa8(B, C); xor_salsa8(C, B);
-        if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
     }
 
 #pragma unroll 16
-    for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = B[idx];
+    for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = B[idx];
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&g_odata[32*(wu+Y)+Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z]));
+        *((uint4*)(&g_odata[32*(wu+Y)+Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z]));
 
 #pragma unroll 16
-    for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = C[idx];
+    for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = C[idx];
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&g_odata[32*(wu+Y)+16+Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z]));
-
-    if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
+        *((uint4*)(&g_odata[32*(wu+Y)+16+Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z]));
 }
 
 template <int WARPS_PER_BLOCK, int TEX_DIM> __global__ void
-scrypt_core_kernel_spinlockB_tex(uint32_t *g_odata, int *mutex)
+scrypt_core_kernelB_tex(uint32_t *g_odata)
 {
-    __shared__ uint32_t X[(WARPS_PER_BLOCK+1)/2][WU_PER_WARP][16+1+_64BIT_ALIGN]; // +1 to resolve bank conflicts
+    __shared__ uint32_t X[WARPS_PER_BLOCK][WU_PER_WARP][16+1+_64BIT_ALIGN]; // +1 to resolve bank conflicts
 
     volatile int warpIdx        = threadIdx.x / warpSize;
     volatile int warpThread     = threadIdx.x % warpSize;
@@ -414,68 +384,60 @@ scrypt_core_kernel_spinlockB_tex(uint32_t *g_odata, int *mutex)
     // registers to store an entire work unit
     uint32_t B[16], C[16];
 
-    if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
-
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&X[warpIdx/2][wu+Y][Z])) = ((TEX_DIM == 1) ?
+        *((uint4*)(&X[warpIdx][wu+Y][Z])) = ((TEX_DIM == 1) ?
                     tex1Dfetch(texRef1D_4_V, (SCRATCH*(offset+wu+Y) + 1023*32 + Z)/4) :
                     tex2D(texRef2D_4_V, 0.5f + (32*1023 + Z)/4, 0.5f + (offset+wu+Y)));
 #pragma unroll 16
-    for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx/2][warpThread][idx];
+    for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx][warpThread][idx];
 
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&X[warpIdx/2][wu+Y][Z])) = ((TEX_DIM == 1) ?
+        *((uint4*)(&X[warpIdx][wu+Y][Z])) = ((TEX_DIM == 1) ?
                     tex1Dfetch(texRef1D_4_V, (SCRATCH*(offset+wu+Y) + 1023*32 + 16+Z)/4) :
                     tex2D(texRef2D_4_V, 0.5f + (32*1023 + 16+Z)/4, 0.5f + (offset+wu+Y)));
 #pragma unroll 16
-    for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx/2][warpThread][idx];
+    for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx][warpThread][idx];
 
-    if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
     xor_salsa8(B, C); xor_salsa8(C, B);
-    if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
 
     for (int i = 0; i < 1024; i++) {
 
-        X[warpIdx/2][warpThread][16] = C[0];
+        X[warpIdx][warpThread][16] = C[0];
 
 #pragma unroll 16
-        for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = B[idx];
+        for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = B[idx];
 #pragma unroll 4
         for (int wu=0; wu < 32; wu+=8)
-            *((uint4*)(&X[warpIdx/2][wu+Y][Z])) ^= ((TEX_DIM == 1) ?
-                        tex1Dfetch(texRef1D_4_V, (SCRATCH*(offset+wu+Y) + 32*(X[warpIdx/2][wu+Y][16] & 1023) + Z)/4) :
-                        tex2D(texRef2D_4_V, 0.5f + (32*(X[warpIdx/2][wu+Y][16] & 1023) + Z)/4, 0.5f + (offset+wu+Y)));
+            *((uint4*)(&X[warpIdx][wu+Y][Z])) ^= ((TEX_DIM == 1) ?
+                        tex1Dfetch(texRef1D_4_V, (SCRATCH*(offset+wu+Y) + 32*(X[warpIdx][wu+Y][16] & 1023) + Z)/4) :
+                        tex2D(texRef2D_4_V, 0.5f + (32*(X[warpIdx][wu+Y][16] & 1023) + Z)/4, 0.5f + (offset+wu+Y)));
 #pragma unroll 16
-        for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx/2][warpThread][idx];
+        for (int idx=0; idx < 16; idx++) B[idx] = X[warpIdx][warpThread][idx];
 
 #pragma unroll 16
-        for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = C[idx];
+        for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = C[idx];
 #pragma unroll 4
         for (int wu=0; wu < 32; wu+=8)
-            *((uint4*)(&X[warpIdx/2][wu+Y][Z])) ^= ((TEX_DIM == 1) ?
-                        tex1Dfetch(texRef1D_4_V, (SCRATCH*(offset+wu+Y) + 32*(X[warpIdx/2][wu+Y][16] & 1023) + 16+Z)/4) :
-                        tex2D(texRef2D_4_V, 0.5f + (32*(X[warpIdx/2][wu+Y][16] & 1023) + 16+Z)/4, 0.5f + (offset+wu+Y)));
+            *((uint4*)(&X[warpIdx][wu+Y][Z])) ^= ((TEX_DIM == 1) ?
+                        tex1Dfetch(texRef1D_4_V, (SCRATCH*(offset+wu+Y) + 32*(X[warpIdx][wu+Y][16] & 1023) + 16+Z)/4) :
+                        tex2D(texRef2D_4_V, 0.5f + (32*(X[warpIdx][wu+Y][16] & 1023) + 16+Z)/4, 0.5f + (offset+wu+Y)));
 #pragma unroll 16
-        for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx/2][warpThread][idx];
+        for (int idx=0; idx < 16; idx++) C[idx] = X[warpIdx][warpThread][idx];
 
-        if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
         xor_salsa8(B, C); xor_salsa8(C, B);
-        if (warpThread == 0) lock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
     }
 
 #pragma unroll 16
-    for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = B[idx];
+    for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = B[idx];
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&g_odata[32*(wu+Y)+Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z]));
+        *((uint4*)(&g_odata[32*(wu+Y)+Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z]));
 
 #pragma unroll 16
-    for (int idx=0; idx < 16; ++idx) X[warpIdx/2][warpThread][idx] = C[idx];
+    for (int idx=0; idx < 16; ++idx) X[warpIdx][warpThread][idx] = C[idx];
 #pragma unroll 4
     for (int wu=0; wu < 32; wu+=8)
-        *((uint4*)(&g_odata[32*(wu+Y)+16+Z])) = *((uint4*)(&X[warpIdx/2][wu+Y][Z]));
-
-    if (warpThread == 0) unlock(mutex, blockIdx.x * (WARPS_PER_BLOCK+1)/2 + warpIdx/2);
+        *((uint4*)(&g_odata[32*(wu+Y)+16+Z])) = *((uint4*)(&X[warpIdx][wu+Y][Z]));
 }
