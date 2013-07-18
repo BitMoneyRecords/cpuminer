@@ -68,7 +68,7 @@ bool validate_config(char *config, int &b, int &w, KernelInterface **kernel = NU
                     *kernel = new TitanKernel();
                 else if (props->major == 3 && props->minor == 0)
                     *kernel = new SpinlockKernel();
-                else if (props->major <= 2)
+                else if (props->major == 2)
                     *kernel = new FermiKernel();
                 else if (props->major == 1)
                     *kernel = new LegacyKernel();
@@ -239,7 +239,7 @@ int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurre
             kernel = new TitanKernel();
         else if (props.major == 3 && props.minor == 0)
             kernel = new SpinlockKernel();
-        else if (props.major <= 2)
+        else if (props.major == 2)
             kernel = new FermiKernel();
         else if (props.major == 1)
             kernel = new LegacyKernel();

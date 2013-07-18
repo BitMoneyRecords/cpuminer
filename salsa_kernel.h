@@ -3,8 +3,6 @@
 
 #include <stdbool.h>
 
-#include "cuda_runtime.h"
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -31,13 +29,18 @@ extern void cuda_scrypt_core(int thr_id, int stream, bool flush);
 extern void cuda_scrypt_DtoH(int thr_id, uint32_t *X, int stream, bool flush);
 extern void cuda_scrypt_sync(int thr_id, int stream);
 extern void computeGold(uint32_t *idata, uint32_t *reference, uint32_t *V);
+
+#ifdef __NVCC__
+#include <cuda_runtime.h>
 extern cudaError_t MyStreamSynchronize(cudaStream_t stream, int situation, int thr_id);
+#endif
 
 #ifdef __cplusplus
 }
 
 // If we're in C++ mode, we're either compiling .cu files or scrypt.cpp
 
+#ifdef __NVCC__
 /**
  * An pure virtual interface for a CUDA kernel implementation.
  * TODO: encapsulate the kernel launch parameters in some kind of wrapper.
@@ -67,6 +70,7 @@ public:
 #define checkCudaErrors(x) x
 #define getLastCudaError(x)
 
+#endif // #ifdef __NVCC__
 #endif // #ifdef __cplusplus
 
 #endif // #ifndef SALSA_KERNEL_H

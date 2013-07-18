@@ -24,7 +24,7 @@ cudaminer_SOURCES	= elist.h miner.h compat.h \
 			  salsa_kernel.cu salsa_kernel.h \
 			  spinlock_kernel.cu spinlock_kernel.h \
 			  legacy_kernel.cu legacy_kernel.h \
-			  kepler_kernel.cu kepler_kernel.h \
+			  fermi_kernel.cu fermi_kernel.h \
 			  titan_kernel.cu titan_kernel.h
 
 cudaminer_LDFLAGS	= $(PTHREAD_FLAGS) @CUDA_LDFLAGS@
