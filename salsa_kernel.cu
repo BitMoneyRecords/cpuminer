@@ -118,7 +118,7 @@ extern "C" int cuda_throughput(int thr_id)
 #endif
 
         KernelInterface *kernel;
-        bool concurrent, GRID_BLOCKS = find_optimal_blockcount(thr_id, kernel, concurrent, WARPS_PER_BLOCK);
+        bool concurrent; GRID_BLOCKS = find_optimal_blockcount(thr_id, kernel, concurrent, WARPS_PER_BLOCK);
         unsigned int mem_size = WU_PER_LAUNCH * sizeof(uint32_t) * 32;
 
         // allocate device memory
