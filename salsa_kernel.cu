@@ -235,13 +235,17 @@ int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurre
 
     // figure out which kernel implementation to use
     if (!validate_config(device_config[thr_id], optimal_blocks, WARPS_PER_BLOCK, &kernel, &props)) {
-             if (props.major == 3 && props.minor == 5)
+             if ((device_config[thr_id] != NULL && device_config[thr_id][0] == 'T') ||
+                 ((device_config[thr_id] == NULL || !strcasecmp(device_config[thr_id], "auto")) && (props.major == 3 && props.minor == 5)))
             kernel = new TitanKernel();
-        else if (props.major == 3 && props.minor == 0)
+        else if ((device_config[thr_id] != NULL && (device_config[thr_id][0] == 'K' || device_config[thr_id][0] == 'S')) ||
+                 ((device_config[thr_id] == NULL || !strcasecmp(device_config[thr_id], "auto")) && (props.major == 3 && props.minor == 0)))
             kernel = new SpinlockKernel();
-        else if (props.major == 2)
+        else if ((device_config[thr_id] != NULL && device_config[thr_id][0] == 'F') ||
+                 ((device_config[thr_id] == NULL || !strcasecmp(device_config[thr_id], "auto")) && props.major == 2))
             kernel = new FermiKernel();
-        else if (props.major == 1)
+        else if ((device_config[thr_id] != NULL && device_config[thr_id][0] == 'L') ||
+                 ((device_config[thr_id] == NULL || !strcasecmp(device_config[thr_id], "auto")) && props.major == 1))
             kernel = new LegacyKernel();
     }
 
