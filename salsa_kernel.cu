@@ -373,7 +373,7 @@ int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurre
 
                 for (int GRID_BLOCKS = 1; !abort_flag && GRID_BLOCKS <= MW; ++GRID_BLOCKS)
                 {
-                    double kHash[16] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
+                    double kHash[16+1] = { 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 };
                     for (WARPS_PER_BLOCK = 1; !abort_flag && WARPS_PER_BLOCK <= kernel->max_warps_per_block(); ++WARPS_PER_BLOCK)
                     {
                         double khash_sec = 0;
@@ -419,23 +419,39 @@ int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurre
 skip2:              ;
                     if (opt_debug) {
                         if (GRID_BLOCKS == 1)
-                                applog(LOG_DEBUG, "       x1    x2    x3    x4    x5    x6    x7    x8" );
-                             if (kHash[2] == 0 && kHash[3] == 0 && kHash[4] == 0 && kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0)
+                                applog(LOG_DEBUG, "       x1    x2    x3    x4    x5    x6    x7    x8    x9   x10   x11   x12   x13   x14   x15   x16" );
+                             if (kHash[2] == 0 && kHash[3] == 0 && kHash[4] == 0 && kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0 && kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f                                           kh/s", GRID_BLOCKS, kHash[1] );
-                        else if (                 kHash[3] == 0 && kHash[4] == 0 && kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0)
+                        else if (                 kHash[3] == 0 && kHash[4] == 0 && kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0 && kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f|%5.1f                                     kh/s", GRID_BLOCKS, kHash[1], kHash[2] );
-                        else if (                                  kHash[4] == 0 && kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0)
+                        else if (                                  kHash[4] == 0 && kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0 && kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f                               kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3] );
-                        else if (                                                   kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0)
+                        else if (                                                   kHash[5] == 0 && kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0 && kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f                         kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4] );
-                        else if (                                                                    kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0)
+                        else if (                                                                    kHash[6] == 0 && kHash[7] == 0 && kHash[8] == 0 && kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f                   kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5] );
-                        else if (                                                                                     kHash[7] == 0 && kHash[8] == 0)
+                        else if (                                                                                     kHash[7] == 0 && kHash[8] == 0 && kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f             kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6] );
-                        else if (                                                                                                      kHash[8] == 0)
+                        else if (                                                                                                      kHash[8] == 0 && kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f       kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7] );
-                        else
+                        else if (                                                                                                                       kHash[9] == 0 && kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
                             applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8] );
+                        else if (                                                                                                                                        kHash[10] == 0 && kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9] );
+                        else if (                                                                                                                                                          kHash[11] == 0 && kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9], kHash[10] );
+                        else if (                                                                                                                                                                            kHash[12] == 0 && kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9], kHash[10], kHash[11] );
+                        else if (                                                                                                                                                                                              kHash[13] == 0 && kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9], kHash[10], kHash[11], kHash[12] );
+                        else if (                                                                                                                                                                                                                kHash[14] == 0 && kHash[15] == 0 && kHash[16] == 0)
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9], kHash[10], kHash[11], kHash[12], kHash[13] );
+                        else if (                                                                                                                                                                                                                                  kHash[15] == 0 && kHash[16] == 0)
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9], kHash[10], kHash[11], kHash[12], kHash[13], kHash[14] );
+                        else if (                                                                                                                                                                                                                                                    kHash[16] == 0)
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9], kHash[10], kHash[11], kHash[12], kHash[13], kHash[14], kHash[15] );
+                        else
+                            applog(LOG_DEBUG, "%3d:%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f|%5.1f kh/s", GRID_BLOCKS, kHash[1], kHash[2], kHash[3], kHash[4], kHash[5], kHash[6], kHash[7], kHash[8], kHash[9], kHash[10], kHash[11], kHash[12], kHash[13], kHash[14], kHash[15], kHash[16] );
                     }
                 }
 skip:           ;
