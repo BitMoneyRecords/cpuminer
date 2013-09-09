@@ -150,6 +150,7 @@ static enum sha256_algos opt_algo = ALGO_SCRYPT;
 static int opt_n_threads;
 int num_processors; // CB
 static int num_gpus; // CB
+int parallel = 0; // CB
 static char *rpc_url;
 static char *rpc_userpass;
 static char *rpc_user, *rpc_pass;
@@ -243,7 +244,7 @@ static char const short_options[] =
 #ifdef HAVE_SYSLOG_H
 	"S"
 #endif
-	"a:c:Dhp:Px:qr:R:s:t:T:o:u:O:Vd:l:i:C:m:"; // CB 
+	"a:c:Dhp:Px:qr:R:s:t:T:o:u:O:Vd:l:i:C:m:H:"; // CB 
 
 static struct option const options[] = {
 	{ "algo", 1, NULL, 'a' },
@@ -279,6 +280,7 @@ static struct option const options[] = {
 	{ "interactive", 1, NULL, 'i' },
 	{ "texture-cache", 1, NULL, 'C' },
 	{ "single-memory", 1, NULL, 'm' },
+	{ "hash-parallel", 1, NULL, 'H' },
 	{ 0, 0, 0, 0 }
 };
 
@@ -1287,6 +1289,11 @@ static void parse_arg (int key, char *arg)
 				device_singlememory[opt_n_threads++] = atoi(pch);
 				pch = strtok (NULL, ",");
 			}
+		}
+		break;
+	case 'H':
+		{
+			parallel = atoi(arg);
 		}
 		break;
 	case 'V':
