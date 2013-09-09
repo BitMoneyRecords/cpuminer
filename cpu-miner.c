@@ -743,16 +743,13 @@ static void *miner_thread(void *userdata)
 		drop_policy();
 	}
 
-	/* Cpu affinity only makes sense if the number of threads is a multiple
-	 * of the number of CPUs */
-#if 0 // CB
-	if (num_processors > 1 && opt_n_threads % num_processors == 0) {
+        if (!parallel) // CB
+        {
 		if (!opt_quiet)
 			applog(LOG_INFO, "Binding thread %d to cpu %d",
 			       thr_id, thr_id % num_processors);
 		affine_to_cpu(thr_id, thr_id % num_processors);
 	}
-#endif
 
 	do { // CB
 		unsigned long hashes_done;
