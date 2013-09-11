@@ -16,7 +16,7 @@ public:
     virtual bool unbindtexture_2D();
 
     virtual char get_identifier() { return 'K'; };
-    virtual int max_warps_per_block() { return 8; };
+    virtual int max_warps_per_block() { return 16; };
     virtual int get_texel_width() { return 4; };
 };
 

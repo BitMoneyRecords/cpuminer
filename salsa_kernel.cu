@@ -199,9 +199,24 @@ inline int _ConvertSMVer2Cores(int major, int minor)
     return nGpuArchCoresPerSM[7].Cores;
 }
 
+#ifdef WIN32
+#include <windows.h>
+static int console_width()
+{
+    CONSOLE_SCREEN_BUFFER_INFO csbi;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &csbi);
+    return csbi.srWindow.Right - csbi.srWindow.Left + 1;
+}
+#else
+int console_width()
+{
+    return 999;
+}
+#endif
 
 int find_optimal_blockcount(int thr_id, KernelInterface* &kernel, bool &concurrent, int &WARPS_PER_BLOCK)
 {
+    int cw = console_width();
     int optimal_blocks = 0;
 
     cudaDeviceProp props;
@@ -423,6 +438,7 @@ skip2:              ;
                             for (int i=1; i<=kernel->max_warps_per_block(); ++i) {
                                 char tmp[16]; sprintf(tmp, "   x%-2d", i);
                                 strcat(line, tmp);
+                                if (cw == 80 && i == 8) strcat(line, "\n                          ");
                             }
                             applog(LOG_DEBUG, line);
                         }
@@ -434,6 +450,7 @@ skip2:              ;
                             else
                                 sprintf(tmp, "     %c", (i<kernel->max_warps_per_block())?'|':' ');
                             strcat(line, tmp);
+                            if (cw == 80 && i == 8) strcat(line, "\n                          ");
                         }
                         strcat(line, "kH/s");
                         applog(LOG_DEBUG, line);
