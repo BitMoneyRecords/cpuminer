@@ -49,7 +49,7 @@ char *device_config[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 char *device_name[8] = {NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL};
 
 #define PROGRAM_NAME		"cudaminer"
-#define PROGRAM_VERSION		"2013-09-06"
+#define PROGRAM_VERSION		"2013-10-08"
 #define DEF_RPC_URL		"http://127.0.0.1:9332/"
 #define LP_SCANTIME		60
 
@@ -1041,6 +1041,7 @@ static void *stratum_thread(void *userdata)
 		} else
 			s = stratum_recv_line(&stratum);
 		if (!s) {
+			applog(LOG_ERR, "Disconnecting stratum connection...");
 			stratum_disconnect(&stratum);
 			applog(LOG_ERR, "Stratum connection interrupted");
 			continue;

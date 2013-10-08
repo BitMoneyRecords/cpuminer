@@ -1,4 +1,4 @@
-AC_INIT([cudaminer], [2013.09.06])
+AC_INIT([cudaminer], [2013.10.08])
 
 AC_PREREQ([2.59c])
 AC_CANONICAL_SYSTEM
